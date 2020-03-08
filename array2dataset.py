@@ -60,16 +60,27 @@ class Node():
         return self.message
 
 
-def verify_node(node, max_length):
+def verify_node(node, max_length, remove_hyperlinks):
     '''Utility function to check a node is not None and that the message length is below a threshold
     '''
-    if node is not None and len(node.message) < max_length:
+    if (
+        node is not None
+        and len(node.message) < max_length
+        and not (remove_hyperlinks * has_hyperlink(node.message))
+    ):
         return True
     else:
         return False
 
 
-def build_dataset_from_tree(msg_tree, max_message_length, max_context_length):
+def has_hyperlink(text):
+    if 'www' in text or 'http' in text:
+        return True
+    else:
+        return False
+
+
+def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks):
     '''Function to convert tree of conversations examples of (context, response)
 
     Args:
@@ -89,14 +100,14 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length):
 
     for node in msg_tree:
         # Iterate over nodes of the message tree
-        if verify_node(node, max_message_length) and\
-                verify_node(node.get_parent(), max_message_length):
+        if verify_node(node, max_message_length, remove_hyperlinks) and\
+                verify_node(node.get_parent(), max_message_length, remove_hyperlinks):
 
             response = node.message
             context = []
             n = 0
             node = node.get_parent()
-            while verify_node(node, max_message_length) and n < max_context_length:
+            while verify_node(node, max_message_length, remove_hyperlinks) and n < max_context_length:
                 context.insert(0, node.message)
                 node = node.get_parent()
                 n += 1
@@ -105,7 +116,7 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length):
     return [contexts, responses]
 
 
-def create_examples(source_data, max_message_length=None, max_context_length=None):
+def create_examples(source_data, max_message_length=None, max_context_length=None, remove_hyperlinks=False):
     '''Function to convert nested conversation lists into examples of (context, response)
 
     Args:
@@ -122,5 +133,5 @@ def create_examples(source_data, max_message_length=None, max_context_length=Non
     for conversation in source_data:
         msg_tree.add_list(conversation)
 
-    dataset = build_dataset_from_tree(msg_tree, max_message_length, max_context_length)
-    return dataset
+    message_dataset = build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks)
+    return message_dataset
