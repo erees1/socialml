@@ -79,14 +79,21 @@ def has_hyperlink(text):
     else:
         return False
 
+def _add_seq_tags(text):
+    '''Utility function to add tags to start and end of sequnces
+    '''
+    return '<SoS> ' + text + ' <EoS>'
 
-def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks):
+
+def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks, add_seq_tags):
     '''Function to convert tree of conversations examples of (context, response)
 
     Args:
         msg_tree (MessageTree): tree of conversation turns
         max_message_length (int): maximum number of words in a message to be included
         max_context_length (int): maxium number of message turns to include in context
+        remove_hyperlinks (bool): whether to remove messages that have hyperlinks in them
+        add_seq_tags (bool): whether to add <SoS> / <EoS> tags at the beginning and end of messages
 
     Returns:
         dataset: list of [contexts, reponses]
@@ -104,11 +111,17 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, re
                 verify_node(node.get_parent(), max_message_length, remove_hyperlinks):
 
             response = node.message
+            if add_seq_tags:
+                response = _add_seq_tags(response)
             context = []
             n = 0
             node = node.get_parent()
             while verify_node(node, max_message_length, remove_hyperlinks) and n < max_context_length:
-                context.insert(0, node.message)
+                if add_seq_tags:
+                    msg = _add_seq_tags(node.message)
+                else:
+                    msg = node.message
+                context.insert(0, msg)
                 node = node.get_parent()
                 n += 1
             responses.append(response)
@@ -116,7 +129,14 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, re
     return [contexts, responses]
 
 
-def create_examples(source_data, max_message_length=None, max_context_length=None, remove_hyperlinks=False):
+def create_examples(
+        source_data,
+        max_message_length=None,
+        max_context_length=None,
+        remove_hyperlinks=False,
+        combine_contexts=True,
+        add_seq_tags=True
+    ):
     '''Function to convert nested conversation lists into examples of (context, response)
 
     Args:
@@ -124,6 +144,9 @@ def create_examples(source_data, max_message_length=None, max_context_length=Non
             [[conversation1], [conversation2]]
         max_message_length (int): maximum number of words in a message to be included
         max_context_length (int): maxium number of message turns to include in context
+        remove_hyperlinks (bool): whether to remove messages that have hyperlinks in them
+        combine_contexts (bool): whehter to combine messages in the context into a single string
+        add_seq_tags (bool): whether to add <SoS> / <EoS> tags at the beginning and end of messages
 
     Returns:
         dataset: list of [contexts, reponses]
@@ -133,5 +156,15 @@ def create_examples(source_data, max_message_length=None, max_context_length=Non
     for conversation in source_data:
         msg_tree.add_list(conversation)
 
-    message_dataset = build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks)
+    message_dataset = build_dataset_from_tree(
+        msg_tree,
+        max_message_length,
+        max_context_length,
+        remove_hyperlinks,
+        add_seq_tags)
+
+    if combine_contexts == True:
+        for i, context in enumerate(message_dataset[0]):
+            message_dataset[0][i] = ' '.join(context)
+
     return message_dataset
