@@ -129,7 +129,7 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, re
     return [contexts, responses]
 
 
-def create_examples(
+def make_training_examples(
         source_data,
         max_message_length=None,
         max_context_length=None,
