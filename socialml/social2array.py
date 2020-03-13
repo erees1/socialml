@@ -1,21 +1,11 @@
 # Module to extract data from social media message exports
 import json
 import os
+import sqlite3
 
 class MessageExtractor():
     '''Base class for social media message extractors with common functions
     '''
-
-    def correct_spelling(self, text, spell):
-        '''Correct spelling of a string using the pyspellchecker module
-        '''
-        words = text.lower().split(' ')
-        unknown = spell.unknown(words)
-        for i, word in enumerate(words):
-            if word in unknown:
-                words[i] = spell.correction(word)
-
-        return ' '.join(words)
 
 
 class FbMessenger(MessageExtractor):
@@ -95,3 +85,10 @@ class FbMessenger(MessageExtractor):
         json_list = self._load_data(conversations)
         data = self._process_data(json_list, max_participants, min_messages, spell)
         return data
+
+class IMessage(MessageExtractor):
+    def __init__(self, filepath):
+        self.filepath = filepath
+
+    def connect_to_databse(self):
+        con = sqlite3.connect(self.filepath)
