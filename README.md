@@ -2,7 +2,8 @@
 Package to convert social media message exports to a dataset suitable for seq2seq modelling.
 
 Currently supports:
-* Facebook messenger (json archive)
+* Facebook messenger, *inbox folder* (json archive)
+* IMessage archive, *chat.db* (sql archive)
 
 ## Quick Start
 

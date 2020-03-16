@@ -38,7 +38,7 @@ class FbMessenger(MessageExtractor):
             json_list.append(json_object)
         return json_list
 
-    def _process_data(self, json_list, max_participants, min_messages=1, spell=None):
+    def _process_data(self, json_list, max_participants, min_messages=1):
         '''Convert list of json objects into lists of messages
         '''
         dataset = []
@@ -57,8 +57,6 @@ class FbMessenger(MessageExtractor):
                     if 'content' in message_object:
                         # Facebook data badly encoded which this fixes
                         content = message_object['content'].encode('latin-1').decode('utf-8')
-                        if spell is not None:
-                            content = self.correct_spelling(content, spell)
                         contents.append(content)
                         time.append(message_object['timestamp_ms'])
                     else:
@@ -69,26 +67,71 @@ class FbMessenger(MessageExtractor):
                     dataset.append(content_of_messages)
         return dataset
 
-    def extract(self, max_participants=None, min_messages=1, spell=None):
+    def extract(self, max_participants=None, min_messages=1):
         '''Extract dataset from self.filepath location
 
         Args:
             max_participants (int): maximum number of particpants (optional)
-            spell (SpellChecker): SpellChecker object to correct spelling with (optional)
+            min_messages (int): conversation must have at least this number of messages
 
         Returns:
-            dataset: List of conversations each with a list of messages
+            arr: List of conversations each with a list of messages
             '''
-        self.spell = spell
-        inbox_folder = self.filepath + '/' + 'inbox'
+        if 'inbox' in self.filepath:
+            inbox_folder = self.filepath
+        else:
+            inbox_folder = self.filepath + '/' + 'inbox'
         conversations = self._get_conversation_paths(inbox_folder)
         json_list = self._load_data(conversations)
-        data = self._process_data(json_list, max_participants, min_messages, spell)
+        data = self._process_data(json_list, max_participants, min_messages)
         return data
 
 class IMessage(MessageExtractor):
     def __init__(self, filepath):
         self.filepath = filepath
+        self._connect_to_databse()
 
-    def connect_to_databse(self):
-        con = sqlite3.connect(self.filepath)
+    def _connect_to_databse(self):
+        self.con = sqlite3.connect(self.filepath)
+
+    def _get_conversation(self, i):
+        c = self.con.cursor()
+        sql = f'SELECT text, handle_id \
+                    FROM message T1 \
+                    INNER JOIN chat_message_join T2 \
+                        ON T2.chat_id={i} \
+                        AND T1.ROWID=T2.message_id \
+                    ORDER BY T1.date'
+        c.execute(sql)
+        messages = c.fetchall()
+        message_text = [i[0] for i in messages if i[0] is not None]
+        return message_text
+
+    def _get_number_conversations(self):
+        sql = 'select ROWID from chat'
+        c = self.con.cursor()
+        c.execute(sql)
+        return max(c.fetchall())[0]
+
+    def _filter_conversations(self, conversations, max_participants, min_messages):
+        filtered_conversations = []
+        for conversation in conversations:
+            if len(conversation) >= min_messages:
+                filtered_conversations.append(conversation)
+        return filtered_conversations
+
+    def extract(self, max_participants=None, min_messages=1):
+        '''Extract dataset from self.filepath location
+
+        Args:
+            max_participants (int): maximum number of particpants (optional)
+            min_messages (int): conversation must have at least this number of messages
+
+        Returns:
+            arr: List of conversations each with a list of messages
+        '''
+
+        n_conversations = self._get_number_conversations()
+        conversations = [self._get_conversation(i + 1) for i in range(n_conversations)]
+        conversations = self._filter_conversations(conversations, max_participants, min_messages)
+        return conversations

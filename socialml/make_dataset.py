@@ -1,3 +1,5 @@
+from tqdm import tqdm
+
 class MessageTree():
     def __init__(self):
         self.db = []
@@ -5,9 +7,13 @@ class MessageTree():
     def __getitem__(self, key):
         return self.db[key]
 
+    def __len__(self):
+        return len(self.db)
+
     def add_node(self, message, parent=None):
         idx = len(self.db)
-        node = Node(idx, message, parent, self)
+        if message is not None:
+            node = Node(idx, message, parent, self)
         if parent is not None:
             parent_node = self.db[parent]
             parent_node._add_child(idx)
@@ -82,10 +88,17 @@ def has_hyperlink(text):
 def _add_seq_tags(text):
     '''Utility function to add tags to start and end of sequnces
     '''
-    return '<SoS> ' + text + ' <EoS>'
+    return '<sos> ' + text + ' <eos>'
 
 
-def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, remove_hyperlinks, add_seq_tags):
+def build_dataset_from_tree(
+    msg_tree,
+    max_message_length,
+    max_context_length,
+    remove_hyperlinks,
+    add_seq_tags,
+    verbose
+):
     '''Function to convert tree of conversations examples of (context, response)
 
     Args:
@@ -105,7 +118,7 @@ def build_dataset_from_tree(msg_tree, max_message_length, max_context_length, re
     if max_context_length is None:
         max_context_length = float('inf')
 
-    for node in msg_tree:
+    for node in tqdm(msg_tree, desc='Creating dataset', disable=not verbose):
         # Iterate over nodes of the message tree
         if verify_node(node, max_message_length, remove_hyperlinks) and\
                 verify_node(node.get_parent(), max_message_length, remove_hyperlinks):
@@ -135,8 +148,9 @@ def make_training_examples(
         max_context_length=None,
         remove_hyperlinks=False,
         combine_contexts=True,
-        add_seq_tags=True
-    ):
+        add_seq_tags=True,
+        verbose=True
+):
     '''Function to convert nested conversation lists into examples of (context, response)
 
     Args:
@@ -147,13 +161,14 @@ def make_training_examples(
         remove_hyperlinks (bool): whether to remove messages that have hyperlinks in them
         combine_contexts (bool): whehter to combine messages in the context into a single string
         add_seq_tags (bool): whether to add <SoS> / <EoS> tags at the beginning and end of messages
+        verbose (bool): whether to print progress
 
     Returns:
         dataset: list of [contexts, reponses]
     '''
 
     msg_tree = MessageTree()
-    for conversation in source_data:
+    for conversation in tqdm(source_data, desc='Creating tree', disable=not verbose):
         msg_tree.add_list(conversation)
 
     message_dataset = build_dataset_from_tree(
@@ -161,9 +176,10 @@ def make_training_examples(
         max_message_length,
         max_context_length,
         remove_hyperlinks,
-        add_seq_tags)
+        add_seq_tags,
+        verbose)
 
-    if combine_contexts == True:
+    if combine_contexts:
         for i, context in enumerate(message_dataset[0]):
             message_dataset[0][i] = ' '.join(context)
 
