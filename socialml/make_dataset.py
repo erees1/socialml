@@ -66,36 +66,25 @@ class Node():
         return self.message
 
 
-def verify_node(node, max_length, remove_hyperlinks):
+def verify_node(node):
     '''Utility function to check a node is not None and that the message length is below a threshold
     '''
     if (
         node is not None
-        and len(node.message) < max_length
-        and not (remove_hyperlinks * has_hyperlink(node.message))
     ):
         return True
     else:
         return False
 
-
-def has_hyperlink(text):
-    if 'www' in text or 'http' in text:
-        return True
-    else:
-        return False
-
 def _add_seq_tags(text):
-    '''Utility function to add tags to start and end of sequnces
+    '''Utility function to add tags to start and end of sequences
     '''
     return '<sos> ' + text + ' <eos>'
 
 
 def build_dataset_from_tree(
     msg_tree,
-    max_message_length,
     max_context_length,
-    remove_hyperlinks,
     add_seq_tags,
     verbose
 ):
@@ -103,25 +92,19 @@ def build_dataset_from_tree(
 
     Args:
         msg_tree (MessageTree): tree of conversation turns
-        max_message_length (int): maximum number of words in a message to be included
-        max_context_length (int): maxium number of message turns to include in context
-        remove_hyperlinks (bool): whether to remove messages that have hyperlinks in them
+        max_context_length (int): maximum number of message turns to include in context
         add_seq_tags (bool): whether to add <SoS> / <EoS> tags at the beginning and end of messages
 
     Returns:
-        dataset: list of [contexts, reponses]
+        dataset: list of [contexts, responses]
     '''
     contexts = []
     responses = []
-    if max_message_length is None:
-        max_message_length = float('inf')
-    if max_context_length is None:
-        max_context_length = float('inf')
 
     for node in tqdm(msg_tree, desc='Creating dataset', disable=not verbose):
         # Iterate over nodes of the message tree
-        if verify_node(node, max_message_length, remove_hyperlinks) and\
-                verify_node(node.get_parent(), max_message_length, remove_hyperlinks):
+        if verify_node(node) and\
+                verify_node(node.get_parent()):
 
             response = node.message
             if add_seq_tags:
@@ -129,7 +112,7 @@ def build_dataset_from_tree(
             context = []
             n = 0
             node = node.get_parent()
-            while verify_node(node, max_message_length, remove_hyperlinks) and n < max_context_length:
+            while verify_node(node) and n < max_context_length:
                 if add_seq_tags:
                     msg = _add_seq_tags(node.message)
                 else:
@@ -144,9 +127,7 @@ def build_dataset_from_tree(
 
 def make_training_examples(
         source_data,
-        max_message_length=None,
         max_context_length=None,
-        remove_hyperlinks=False,
         combine_contexts=True,
         add_seq_tags=True,
         verbose=True
@@ -156,15 +137,13 @@ def make_training_examples(
     Args:
         source_data (2d array, list[lists]): 2d data structure with data organised by \
             [[conversation1], [conversation2]]
-        max_message_length (int): maximum number of words in a message to be included
-        max_context_length (int): maxium number of message turns to include in context
-        remove_hyperlinks (bool): whether to remove messages that have hyperlinks in them
-        combine_contexts (bool): whehter to combine messages in the context into a single string
+        max_context_length (int): maximum number of message turns to include in context
+        combine_contexts (bool): whether to combine messages in the context into a single string
         add_seq_tags (bool): whether to add <SoS> / <EoS> tags at the beginning and end of messages
         verbose (bool): whether to print progress
 
     Returns:
-        dataset: list of [contexts, reponses]
+        dataset: list of [contexts, responses]
     '''
 
     msg_tree = MessageTree()
@@ -173,9 +152,7 @@ def make_training_examples(
 
     message_dataset = build_dataset_from_tree(
         msg_tree,
-        max_message_length,
         max_context_length,
-        remove_hyperlinks,
         add_seq_tags,
         verbose)
 
